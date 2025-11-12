@@ -11,13 +11,19 @@ test('login screen can be rendered', function () {
 });
 
 test('users can authenticate using the login screen', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create([
+        'email' => 'barber@test.com', // Opsional: Beri email unik
+    ]);
+    
+    // ⭐ BERIKAN ROLE: Agar user diarahkan ke /dashboard
+    $user->assignRole('barber'); 
 
     $response = Livewire::test(Login::class)
         ->set('email', $user->email)
         ->set('password', 'password')
         ->call('login');
 
+    // Ekspektasi tetap ke dashboard, dan sekarang akan berhasil
     $response
         ->assertHasNoErrors()
         ->assertRedirect(route('dashboard', absolute: false));
