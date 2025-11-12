@@ -19,7 +19,8 @@ test('new users can register', function () {
 
     $response
         ->assertHasNoErrors()
-        ->assertRedirect(route('dashboard', absolute: false));
+        // ⭐ PERBAIKAN: User baru (Customer) diarahkan ke route 'home' (yaitu '/')
+        ->assertRedirect(route('home', absolute: false)); // Ganti 'dashboard' menjadi 'home'
 
     $this->assertAuthenticated();
 });
