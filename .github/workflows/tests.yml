@@ -1,0 +1,90 @@
+name: tests
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+  pull_request:
+    branches:
+      - develop
+      - main
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    environment: Testing
+    
+    # 1. BLOK BARU: MENDIFINISIKAN SERVICE DATABASE MARIA-DB (PENGGANTI SQLITE)
+    services:
+      mysql:
+        image: mariadb:10.5 # Menggunakan MariaDB versi 10.5
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: true
+          MYSQL_DATABASE: testing_db # Database yang akan digunakan untuk testing
+          MYSQL_USER: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.4
+          tools: composer:v2
+          coverage: xdebug
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Node Dependencies
+        run: npm i
+
+      - name: Add Flux Credentials Loaded From ENV
+        run: composer config http-basic.composer.fluxui.dev "${{ secrets.FLUX_USERNAME }}" "${{ secrets.FLUX_LICENSE_KEY }}"
+
+      - name: Install Dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Copy Environment File
+        run: cp .env.example .env
+
+      - name: Generate Application Key
+        run: php artisan key:generate
+        
+      # 2. BLOK BARU: MENUNGGU DATABASE SAMPAI SIAP SEBELUM MIGRATION
+      - name: Wait for database to be ready
+        run: |
+          # Instal klien MariaDB
+          sudo apt-get install -y mariadb-client 
+          # Tunggu hingga server merespons ping
+          while ! mysqladmin ping -h"127.0.0.1" --silent; do
+            echo "Waiting for database connection..."
+            sleep 1
+          done
+          echo "Database is ready!"
+
+      - name: Build Assets
+        run: npm run build
+
+      - name: Run Tests
+        run: ./vendor/bin/pest
+        # 3. MENGATUR ENVIRONMENT VARIABLE UNTUK KONEKSI KE MARIA-DB
+        env:
+          DB_CONNECTION: mysql     # Menggunakan MySQL
+          DB_HOST: 127.0.0.1       # Host service Docker
+          DB_PORT: 3306
+          DB_DATABASE: testing_db  # Sesuai dengan nama di blok services
+          DB_USERNAME: root
+          DB_PASSWORD: ''
